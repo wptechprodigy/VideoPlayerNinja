@@ -30,6 +30,7 @@
 /// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 /// THE SOFTWARE.
 
+import Photos
 import MediaPlayer
 import MobileCoreServices
 import UIKit
@@ -73,9 +74,58 @@ class MergeVideoViewController: UIViewController {
   }
 
   @IBAction func loadAudio(_ sender: AnyObject) {
+    let mediaPickerController = MPMediaPickerController(mediaTypes: .any)
+    mediaPickerController.delegate = self
+    mediaPickerController.prompt = "Select Audio"
+    present(mediaPickerController, animated: true, completion: nil)
   }
 
   @IBAction func merge(_ sender: AnyObject) {
+  }
+  
+  func exportDidFinish(_ session: AVAssetExportSession) {
+    activityMonitor.stopAnimating()
+    firstAsset = nil
+    secondAsset = nil
+    audioAsset = nil
+    
+    guard
+      session.status == AVAssetExportSession.Status.completed,
+      let outputURL = session.outputURL else { return }
+    
+    let saveVideoToPhotos = {
+      let changes: () -> Void = {
+        PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: outputURL)
+      }
+      
+      PHPhotoLibrary.shared().performChanges(changes) { (saved, error) in
+        DispatchQueue.main.async {
+          let success = saved && (error == nil)
+          let title = success ? "Success" : "Error"
+          let message = success ? "Video saved!" : "Failed to save video!"
+          
+          let alert = UIAlertController(title: title,
+                                        message: message,
+                                        preferredStyle: .alert)
+          alert.addAction(UIAlertAction(title: "Ok!",
+                                        style: .cancel,
+                                        handler: nil))
+          self.present(alert,
+                  animated: true,
+                  completion: nil)
+        }
+      }
+    }
+    
+    if PHPhotoLibrary.authorizationStatus() != .authorized {
+      PHPhotoLibrary.requestAuthorization { (status) in
+        if status == .authorized {
+          saveVideoToPhotos()
+        }
+      }
+    } else {
+      saveVideoToPhotos()
+    }
   }
 }
 
@@ -119,4 +169,37 @@ extension MergeVideoViewController: UINavigationControllerDelegate {
 
 // MARK: - MPMediaPickerControllerDelegate
 extension MergeVideoViewController: MPMediaPickerControllerDelegate {
+  func mediaPicker(_ mediaPicker: MPMediaPickerController,
+                   didPickMediaItems mediaItemCollection: MPMediaItemCollection) {
+    dismiss(animated: true) {
+      let selectedSongs = mediaItemCollection.items
+      guard let song = selectedSongs.first else {
+        return
+      }
+      
+      let title: String
+      let message: String
+      if let url = song.value(forProperty: MPMediaItemPropertyAssetURL) as? URL {
+        self.audioAsset = AVAsset(url: url)
+        title = "Asset Loaded"
+        message = "Audio Loaded"
+      } else {
+        self.audioAsset = nil
+        title = "Asset Not Available"
+        message = "Audio Not Loaded"
+      }
+      
+      let alert = UIAlertController(title: title,
+                                    message: message,
+                                    preferredStyle: .alert)
+      alert.addAction(UIAlertAction(title: "Ok!",
+                                    style: .cancel,
+                                    handler: nil))
+      self.present(alert, animated: true, completion: nil)
+    }
+  }
+  
+  func mediaPickerDidCancel(_ mediaPicker: MPMediaPickerController) {
+    dismiss(animated: true, completion: nil)
+  }
 }
