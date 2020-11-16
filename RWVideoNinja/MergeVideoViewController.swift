@@ -81,6 +81,43 @@ class MergeVideoViewController: UIViewController {
   }
 
   @IBAction func merge(_ sender: AnyObject) {
+    guard
+      let firstAsset = firstAsset,
+      let secondAsset = secondAsset else { return }
+    
+    activityMonitor.startAnimating()
+    
+    let mixComposition = AVMutableComposition()
+    
+    guard
+      let firstTrack = mixComposition.addMutableTrack(
+        withMediaType: .video,
+        preferredTrackID: Int32(kCMPersistentTrackID_Invalid)) else { return }
+    
+    do {
+      try firstTrack.insertTimeRange(
+        CMTimeRangeMake(start: .zero, duration: firstAsset.duration),
+        of: firstAsset.tracks(withMediaType: .video)[0],
+        at: .zero)
+    } catch {
+      print("Failed to load first track")
+      return
+    }
+    
+    guard
+      let secondTrack = mixComposition.addMutableTrack(
+        withMediaType: .video,
+        preferredTrackID: Int32(kCMPersistentTrackID_Invalid)) else { return }
+    
+    do {
+      try secondTrack.insertTimeRange(
+        CMTimeRangeMake(start: .zero, duration: secondAsset.duration),
+        of: secondAsset.tracks(withMediaType: .video)[0],
+        at: firstAsset.duration)
+    } catch {
+      print("Failed to load second track")
+      return
+    }
   }
   
   func exportDidFinish(_ session: AVAssetExportSession) {
